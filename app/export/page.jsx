@@ -16,6 +16,7 @@ export default function ExportPage() {
 
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [productData, setProductData] = useState(null);
   const [exportData, setExportData] = useState(null);
 
@@ -98,10 +99,41 @@ export default function ExportPage() {
     return imageCount * 250;
   };
 
-  const handleDownload = () => {
-    if (exportData?.zipUrl) {
-      window.open(exportData.zipUrl, '_blank');
-      toast.success('Download started!');
+  const handleDownload = async () => {
+    if (!exportData?.zipUrl) return;
+    
+    setDownloading(true);
+    
+    try {
+      toast.loading('Preparing download...');
+      
+      // Fetch the ZIP file as blob
+      const response = await fetch(exportData.zipUrl);
+      
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+      
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${productData?.name || 'Product'}_PicPolish.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.dismiss();
+      toast.success('Download complete!');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('Download failed');
+      console.error('Download error:', error);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -222,11 +254,13 @@ export default function ExportPage() {
               </div>
               <Button
                 onClick={handleDownload}
+                loading={downloading}
+                disabled={downloading}
                 size="lg"
                 className="flex items-center gap-2"
               >
                 <Download className="w-5 h-5" />
-                Download ZIP
+                {downloading ? 'Downloading...' : 'Download ZIP'}
               </Button>
             </div>
           </div>
@@ -236,12 +270,20 @@ export default function ExportPage() {
             <div className="text-gray-700">
               <div className="mb-2">📁 {productData?.name || 'Product'}_PicPolish.zip</div>
               <div className="ml-4 space-y-1">
-                <div>├── 📁 Amazon/</div>
-                <div className="ml-8">├── main_2000x2000.jpg</div>
-                <div className="ml-8">└── UPLOAD_GUIDE.txt</div>
-                <div>├── 📁 Flipkart/</div>
-                <div className="ml-8">├── main_2000x2000.jpg</div>
-                <div className="ml-8">└── UPLOAD_GUIDE.txt</div>
+                {productData?.marketplaces?.includes('Amazon') && (
+                  <>
+                    <div>├── 📁 Amazon/</div>
+                    <div className="ml-8">├── main_2000x2000.jpg</div>
+                    <div className="ml-8">└── UPLOAD_GUIDE.txt</div>
+                  </>
+                )}
+                {productData?.marketplaces?.includes('Flipkart') && (
+                  <>
+                    <div>├── 📁 Flipkart/</div>
+                    <div className="ml-8">├── main_2000x2000.jpg</div>
+                    <div className="ml-8">└── UPLOAD_GUIDE.txt</div>
+                  </>
+                )}
                 {productData?.marketplaces?.includes('Meesho') && (
                   <>
                     <div>├── 📁 Meesho/</div>

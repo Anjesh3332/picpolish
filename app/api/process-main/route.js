@@ -1,17 +1,20 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { removeBackground } from '@/lib/services/photoroomService';
-import { processMainImage, resizeForMarketplaces } from '@/lib/services/imageService';
-import { uploadFile, downloadFile } from '@/lib/services/storageService';
+import { processMainImage } from '@/lib/services/imageService';
+import { uploadFile } from '@/lib/services/storageService';
+import axios from 'axios';
 
 /**
  * POST /api/process-main
- * Process main product image
+ * Process main product image - SIMPLIFIED VERSION
  */
 export async function POST(request) {
   try {
     const body = await request.json();
     const { productId, mainImageIndex = 0, marketplaces } = body;
+
+    console.log('Processing request:', { productId, mainImageIndex, marketplaces });
 
     if (!productId) {
       return NextResponse.json(
@@ -36,7 +39,10 @@ export async function POST(request) {
       .eq('product_id', productId)
       .order('created_at', { ascending: true });
 
+    console.log('Found images:', images?.length);
+
     if (imagesError || !images || images.length === 0) {
+      console.error('Images query error:', imagesError);
       return NextResponse.json(
         { error: 'Product images not found' },
         { status: 404 }
@@ -52,20 +58,29 @@ export async function POST(request) {
       );
     }
 
-    // Download original image from storage
-    const imagePath = mainImage.original_url.split('/').slice(-2).join('/');
-    const imageBuffer = await downloadFile(imagePath);
+    console.log('Main image URL:', mainImage.original_url);
+
+    // Download image directly from the public URL
+    const imageResponse = await axios.get(mainImage.original_url, {
+      responseType: 'arraybuffer',
+      timeout: 30000,
+    });
+    const imageBuffer = Buffer.from(imageResponse.data);
+    console.log('Image downloaded, size:', imageBuffer.length);
 
     // Step 1: Remove background using Photoroom API
+    console.log('Removing background...');
     const noBgBuffer = await removeBackground(imageBuffer, {
       format: 'PNG',
       size: 'full',
     });
+    console.log('Background removed');
 
     // Step 2: Process for each marketplace
     const processedImages = {};
     
     for (const marketplace of marketplaces) {
+      console.log('Processing for', marketplace);
       const processedBuffer = await processMainImage(noBgBuffer, marketplace);
       
       // Upload processed image
@@ -79,22 +94,23 @@ export async function POST(request) {
         url: uploadResult.publicUrl,
         path: uploadResult.path,
       };
+      
+      console.log('Uploaded', marketplace, 'image');
     }
 
     // Update image record in database
     const { error: updateError } = await supabase
       .from('images')
       .update({
-        processed_url: processedImages[marketplaces[0]].url, // First marketplace as primary
+        processed_url: processedImages[marketplaces[0]].url,
         marketplace_variants: processedImages,
         processing_status: 'completed',
-        quality_score: 0.95, // Simplified for MVP
+        quality_score: 0.95,
       })
       .eq('id', mainImage.id);
 
     if (updateError) {
       console.error('Update error:', updateError);
-      // Continue for MVP
     }
 
     // Update product status
@@ -110,6 +126,8 @@ export async function POST(request) {
       console.error('Product update error:', productUpdateError);
     }
 
+    console.log('Processing complete');
+
     return NextResponse.json({
       success: true,
       processedImages,
@@ -120,15 +138,19 @@ export async function POST(request) {
     console.error('Process-main API error:', error);
     
     // Handle specific errors
-    if (error.message.includes('Photoroom')) {
+    if (error.message && error.message.includes('Photoroom')) {
       return NextResponse.json(
-        { error: 'Background removal failed. Please check your API key.' },
+        { error: 'Background removal failed. Check your Photoroom API key.' },
         { status: 500 }
       );
     }
 
+    if (error.response) {
+      console.error('HTTP error:', error.response.status, error.response.data);
+    }
+
     return NextResponse.json(
-      { error: 'Processing failed: ' + error.message },
+      { error: 'Processing failed: ' + (error.message || 'Unknown error') },
       { status: 500 }
     );
   }

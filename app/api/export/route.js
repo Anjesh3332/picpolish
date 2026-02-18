@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createProductZip } from '@/lib/services/zipService';
-import { downloadFile, uploadFile } from '@/lib/services/storageService';
+import { uploadFile } from '@/lib/services/storageService';
 import { calculateTimeSaved, calculateMoneySaved } from '@/lib/utils/helpers';
+import axios from 'axios';
 
 /**
  * POST /api/export
@@ -12,6 +13,8 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const { productId } = body;
+
+    console.log('Creating export for product:', productId);
 
     if (!productId) {
       return NextResponse.json(
@@ -30,11 +33,14 @@ export async function POST(request) {
       .single();
 
     if (productError || !product) {
+      console.error('Product not found:', productError);
       return NextResponse.json(
         { error: 'Product not found' },
         { status: 404 }
       );
     }
+
+    console.log('Product found:', product.name);
 
     // Get all processed images
     const { data: images, error: imagesError } = await supabase
@@ -43,31 +49,56 @@ export async function POST(request) {
       .eq('product_id', productId);
 
     if (imagesError || !images) {
+      console.error('Images not found:', imagesError);
       return NextResponse.json(
         { error: 'Images not found' },
         { status: 404 }
       );
     }
 
+    console.log('Found images:', images.length);
+
     // Download processed images from storage
     const processedImages = {};
     
     for (const marketplace of product.marketplaces) {
+      console.log('Processing marketplace:', marketplace);
+      
       const mainImage = images.find(img => img.type === 'main');
       
       if (mainImage && mainImage.marketplace_variants) {
         const variant = mainImage.marketplace_variants[marketplace];
         
-        if (variant && variant.path) {
-          const buffer = await downloadFile(variant.path);
+        if (variant && variant.url) {
+          console.log('Downloading from:', variant.url);
+          
+          // Download the processed image via public URL
+          const response = await axios.get(variant.url, {
+            responseType: 'arraybuffer',
+            timeout: 30000,
+          });
+          
+          const buffer = Buffer.from(response.data);
+          console.log('Downloaded', marketplace, 'image, size:', buffer.length);
           
           processedImages[marketplace] = {
             main: buffer,
             secondary: [], // Will be added in Phase 2
           };
+        } else {
+          console.warn('No variant found for', marketplace);
         }
       }
     }
+
+    if (Object.keys(processedImages).length === 0) {
+      return NextResponse.json(
+        { error: 'No processed images found' },
+        { status: 404 }
+      );
+    }
+
+    console.log('Creating ZIP with', Object.keys(processedImages).length, 'marketplaces');
 
     // Create ZIP file
     const productData = {
@@ -77,6 +108,7 @@ export async function POST(request) {
     };
 
     const zipBuffer = await createProductZip(productData, product.name);
+    console.log('ZIP created, size:', zipBuffer.length);
 
     // Upload ZIP to storage
     const zipUpload = await uploadFile(
@@ -85,10 +117,12 @@ export async function POST(request) {
       `exports/${productId}`
     );
 
+    console.log('ZIP uploaded to:', zipUpload.publicUrl);
+
     // Calculate stats
-    const totalImages = images.length;
-    const timeSaved = calculateTimeSaved(totalImages);
-    const moneySaved = calculateMoneySaved(totalImages);
+    const totalImages = images.length * product.marketplaces.length; // Each image x marketplaces
+    const timeSaved = calculateTimeSaved(images.length);
+    const moneySaved = calculateMoneySaved(images.length);
 
     // Update product with ZIP URL and completion status
     const { error: updateError } = await supabase
@@ -111,21 +145,23 @@ export async function POST(request) {
       .insert({
         user_id: product.user_id,
         product_id: productId,
-        images_processed: totalImages,
-        time_saved_seconds: totalImages * 420, // 7 minutes per image
+        images_processed: images.length,
+        time_saved_seconds: images.length * 420, // 7 minutes per image
         money_saved_inr: moneySaved,
-        credits_used: totalImages,
+        credits_used: images.length,
       });
 
     if (historyError) {
       console.error('History creation error:', historyError);
     }
 
+    console.log('Export complete!');
+
     return NextResponse.json({
       success: true,
       zipUrl: zipUpload.publicUrl,
       stats: {
-        totalImages,
+        totalImages: images.length,
         timeSaved,
         moneySaved,
       },
@@ -181,6 +217,7 @@ export async function GET(request) {
         zipUrl: product.zip_url,
         healthScore: product.health_score,
         totalImages: product.total_images,
+        marketplaces: product.marketplaces,
       },
     });
 
