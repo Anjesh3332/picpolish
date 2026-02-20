@@ -2,9 +2,12 @@
 
 import Link from 'next/link';
 import { ArrowRight, Check, Upload, Zap, Download, Shield } from 'lucide-react';
+import AuthHeader from '@/components/layout/AuthHeader';
+
 
 export default function LandingPage() {
   return (
+  
     <div className="min-h-screen bg-gradient-to-b from-white to-primary-50">
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
@@ -18,7 +21,7 @@ export default function LandingPage() {
               <a href="#pricing" className="text-gray-600 hover:text-gray-900">Pricing</a>
             </nav>
             <Link 
-              href="/upload"
+              href="/signup"
               className="bg-primary-600 text-white px-6 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium"
             >
               Get Started →
@@ -40,7 +43,7 @@ export default function LandingPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link 
-              href="/upload"
+              href="/signup"
               className="bg-primary-600 text-white px-8 py-4 rounded-lg hover:bg-primary-700 transition-colors font-medium text-lg flex items-center gap-2"
             >
               Start Processing Free
@@ -70,7 +73,7 @@ export default function LandingPage() {
       </section>
 
       {/* How It Works */}
-      <section id="how-it-works" className="bg-white py-20">
+      <section id="how-it-works" className="bg-white py-5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-4xl font-bold text-center mb-16">How It Works</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">

@@ -1,26 +1,39 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { useAuth } from '@/lib/hooks/useAuth';
+import ProtectedRoute from '@/components/common/ProtectedRoute';
 import MarketplaceSelector from '@/components/upload/MarketplaceSelector';
 import FileDropzone from '@/components/upload/FileDropzone';
 import ProductTree from '@/components/product/ProductTree';
 import UploadProgress from '@/components/upload/UploadProgress';
 import Loader from '@/components/common/Loader';
 
-export default function UploadPage() {
+function UploadContent() {
   const router = useRouter();
+  const { user, profile, refreshProfile } = useAuth();
   
   // Workflow state
-  const [currentStep, setCurrentStep] = useState(0); // 0: marketplace, 1: upload, 2: confirm, 3: processing
+  const [currentStep, setCurrentStep] = useState(0);
   const [selectedMarketplaces, setSelectedMarketplaces] = useState([]);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [productData, setProductData] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processingStep, setProcessingStep] = useState(0);
+
+  // Check credits on mount
+  useEffect(() => {
+    if (profile) {
+      if (profile.credits_remaining <= 0) {
+        toast.error('No credits remaining. Please purchase more credits.');
+        router.push('/pricing');
+      }
+    }
+  }, [profile, router]);
 
   // Step 0: Marketplace Selection
   const handleMarketplacesContinue = (marketplaces) => {
@@ -30,6 +43,11 @@ export default function UploadPage() {
 
   // Step 1: Upload Files
   const handleFilesChange = (files) => {
+    // Check if user has enough credits
+    if (profile && files.length > profile.credits_remaining) {
+      toast.error(`You only have ${profile.credits_remaining} credits remaining. Please purchase more.`);
+      return;
+    }
     setUploadedFiles(files);
   };
 
@@ -39,13 +57,19 @@ export default function UploadPage() {
       return;
     }
 
+    // Check credits again before processing
+    if (profile && uploadedFiles.length > profile.credits_remaining) {
+      toast.error(`Insufficient credits. You need ${uploadedFiles.length} but have ${profile.credits_remaining}.`);
+      router.push('/pricing');
+      return;
+    }
+
     setProcessing(true);
     setUploadProgress(10);
 
     try {
-      // Upload files to server
       const formData = new FormData();
-      uploadedFiles.forEach((fileObj, index) => {
+      uploadedFiles.forEach((fileObj) => {
         formData.append('images', fileObj.file);
       });
       formData.append('marketplaces', JSON.stringify(selectedMarketplaces));
@@ -65,18 +89,17 @@ export default function UploadPage() {
 
       setUploadProgress(100);
 
-      // Organize product data
       const organized = {
-        name: 'Product', // Will be auto-detected or user-provided later
+        name: 'Product',
         category: data.detectedCategory || 'Other',
         images: uploadedFiles,
-        suggestedMainIndex: 0, // First image by default
+        suggestedMainIndex: 0,
         uploadedUrls: data.uploadedUrls,
         productId: data.productId,
       };
 
       setProductData(organized);
-      setCurrentStep(2); // Move to confirmation step
+      setCurrentStep(2);
       toast.success('Images uploaded successfully!');
     } catch (error) {
       console.error('Upload error:', error);
@@ -88,16 +111,14 @@ export default function UploadPage() {
 
   // Step 2: Confirm Product Tree
   const handleConfirmProduct = async () => {
-    setCurrentStep(3); // Move to processing
+    setCurrentStep(3);
     setProcessingStep(0);
     setUploadProgress(0);
 
     try {
-      // Start processing
-      setProcessingStep(1); // Detecting
+      setProcessingStep(1);
       setUploadProgress(25);
 
-      // Call process API
       const response = await fetch('/api/process-main', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -114,16 +135,17 @@ export default function UploadPage() {
         throw new Error(data.error || 'Processing failed');
       }
 
-      setProcessingStep(2); // Processing
+      setProcessingStep(2);
       setUploadProgress(75);
 
-      // Wait a bit for processing to complete
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      setProcessingStep(3); // Export
+      setProcessingStep(3);
       setUploadProgress(100);
 
-      // Redirect to export page
+      // Deduct credits after successful processing
+      await refreshProfile();
+
       setTimeout(() => {
         router.push(`/export?productId=${productData.productId}`);
       }, 1000);
@@ -131,12 +153,11 @@ export default function UploadPage() {
     } catch (error) {
       console.error('Processing error:', error);
       toast.error(error.message);
-      setCurrentStep(2); // Go back to confirmation
+      setCurrentStep(2);
     }
   };
 
   const handleChangeMainImage = () => {
-    // For MVP, just show toast - full implementation in Phase 2
     toast('Main image selection will be available in the next update', {
       icon: '🔜',
     });
@@ -151,8 +172,13 @@ export default function UploadPage() {
             <Link href="/" className="text-2xl font-bold text-primary-600">
               PicPolish
             </Link>
-            <div className="text-sm text-gray-600">
-              Step {currentStep + 1} of 4
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">{profile?.credits_remaining || 0}</span> credits
+              </div>
+              <div className="text-sm text-gray-600">
+                Step {currentStep + 1} of 4
+              </div>
             </div>
           </div>
         </div>
@@ -177,11 +203,15 @@ export default function UploadPage() {
               <p className="text-gray-600">
                 Selected marketplaces: {selectedMarketplaces.join(', ')}
               </p>
+              <p className="text-sm text-gray-500 mt-2">
+                You have {profile?.credits_remaining || 0} credits remaining
+              </p>
             </div>
 
             <FileDropzone
               files={uploadedFiles}
               onFilesChange={handleFilesChange}
+              maxFiles={profile?.credits_remaining || 5}
             />
 
             <div className="flex items-center justify-between mt-8">
@@ -259,5 +289,13 @@ export default function UploadPage() {
         <Loader fullScreen text="Uploading images..." />
       )}
     </div>
+  );
+}
+
+export default function UploadPage() {
+  return (
+    <ProtectedRoute>
+      <UploadContent />
+    </ProtectedRoute>
   );
 }

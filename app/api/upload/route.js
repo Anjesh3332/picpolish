@@ -6,7 +6,7 @@ import { validateUploadRequest } from '@/lib/utils/validators';
 
 /**
  * POST /api/upload
- * Upload product images
+ * Upload product images (with authentication)
  */
 export async function POST(request) {
   try {
@@ -42,9 +42,36 @@ export async function POST(request) {
     // Get Supabase client
     const supabase = await createClient();
 
-    // Get or create user (for MVP, we'll skip auth and use anonymous user)
-    // In production, get from session: const { data: { user } } = await supabase.auth.getUser();
-    const userId = 'anonymous'; // Placeholder for MVP
+    // Get authenticated user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized. Please login.' },
+        { status: 401 }
+      );
+    }
+
+    // Check user credits
+    const { data: profile, error: profileError } = await supabase
+      .from('users')
+      .select('credits_remaining')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile) {
+      return NextResponse.json(
+        { error: 'User profile not found' },
+        { status: 404 }
+      );
+    }
+
+    if (profile.credits_remaining < images.length) {
+      return NextResponse.json(
+        { error: `Insufficient credits. You have ${profile.credits_remaining} but need ${images.length}.` },
+        { status: 403 }
+      );
+    }
 
     // Create product record
     const productId = uuidv4();
@@ -54,9 +81,9 @@ export async function POST(request) {
       .from('products')
       .insert({
         id: productId,
-        user_id: userId,
+        user_id: user.id,
         name: productName,
-        category: 'Other', // Will be detected later
+        category: 'Other',
         marketplaces: marketplaces,
         status: 'pending',
         total_images: images.length,
@@ -64,7 +91,10 @@ export async function POST(request) {
 
     if (productError) {
       console.error('Product creation error:', productError);
-      // For MVP, continue even if DB insert fails
+      return NextResponse.json(
+        { error: 'Failed to create product' },
+        { status: 500 }
+      );
     }
 
     // Convert images to buffers and upload
@@ -101,15 +131,16 @@ export async function POST(request) {
 
     if (imagesError) {
       console.error('Images creation error:', imagesError);
-      // Continue for MVP
     }
 
-    // Return success
+    // NOTE: We don't deduct credits yet - only after successful processing
+    // This prevents charging users for failed uploads
+
     return NextResponse.json({
       success: true,
       productId,
       uploadedUrls: uploadResults.map(r => r.publicUrl),
-      detectedCategory: 'Other', // Will implement actual detection in Phase 2
+      detectedCategory: 'Other',
       message: 'Images uploaded successfully',
     });
 
