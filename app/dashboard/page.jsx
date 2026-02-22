@@ -33,7 +33,6 @@ function DashboardContent() {
     if (!user) return;
 
     try {
-      // Load user's products
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('*')
@@ -45,7 +44,6 @@ function DashboardContent() {
 
       setProducts(productsData || []);
 
-      // Load processing history stats
       const { data: historyData, error: historyError } = await supabase
         .from('processing_history')
         .select('*')
@@ -53,10 +51,12 @@ function DashboardContent() {
 
       if (historyError) throw historyError;
 
-      // Calculate total stats
-      const totalImages = historyData?.reduce((sum, h) => sum + h.images_processed, 0) || 0;
-      const totalTimeSaved = historyData?.reduce((sum, h) => sum + h.time_saved_seconds, 0) || 0;
-      const totalMoneySaved = historyData?.reduce((sum, h) => sum + h.money_saved_inr, 0) || 0;
+      const totalImages =
+        historyData?.reduce((sum, h) => sum + h.images_processed, 0) || 0;
+      const totalTimeSaved =
+        historyData?.reduce((sum, h) => sum + h.time_saved_seconds, 0) || 0;
+      const totalMoneySaved =
+        historyData?.reduce((sum, h) => sum + h.money_saved_inr, 0) || 0;
 
       setStats({
         totalProducts: productsData?.length || 0,
@@ -64,7 +64,6 @@ function DashboardContent() {
         timeSaved: totalTimeSaved,
         moneySaved: totalMoneySaved,
       });
-
     } catch (error) {
       console.error('Dashboard load error:', error);
       toast.error('Failed to load dashboard');
@@ -104,14 +103,12 @@ function DashboardContent() {
             </Link>
 
             <div className="flex items-center gap-4">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium text-gray-900">
-                  {profile?.full_name || user?.email}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {profile?.credits_remaining || 10} credits remaining
-                </p>
-              </div>
+              <Link href="/profile">
+                <Button variant="secondary" size="sm">Profile</Button>
+              </Link>
+              <Link href="/payments">
+                <Button variant="secondary" size="sm">Payments</Button>
+              </Link>
               <Button variant="secondary" size="sm" onClick={handleSignOut}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Sign Out
@@ -123,20 +120,17 @@ function DashboardContent() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Welcome back, {profile?.full_name?.split(' ')[0] || 'there'}! 👋
           </h1>
           <p className="text-gray-600">
-            {profile?.plan === 'free' 
+            {profile?.plan === 'free'
               ? `You have ${profile?.credits_remaining || 0} free credits remaining`
-              : 'Manage your products and view your stats'
-            }
+              : 'Manage your products and view your stats'}
           </p>
         </div>
 
-        {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
           <Link href="/upload">
             <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-xl p-6 text-white hover:shadow-lg transition-shadow cursor-pointer">
@@ -167,126 +161,66 @@ function DashboardContent() {
           </Link>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-600">Total Products</span>
-              <TrendingUp className="w-4 h-4 text-green-600" />
-            </div>
-            <div className="text-3xl font-bold text-gray-900">
-              {stats.totalProducts}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-600">Images Processed</span>
-              <TrendingUp className="w-4 h-4 text-blue-600" />
-            </div>
-            <div className="text-3xl font-bold text-gray-900">
-              {stats.totalImages}
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="bg-white rounded-xl p-6 shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm text-gray-500">Products</h4>
+                <p className="text-2xl font-bold">{stats.totalProducts}</p>
+              </div>
+              <TrendingUp className="w-8 h-8 text-primary-600" />
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-600">Time Saved</span>
-              <TrendingUp className="w-4 h-4 text-purple-600" />
-            </div>
-            <div className="text-3xl font-bold text-gray-900">
-              {formatTime(stats.timeSaved)}
+          <div className="bg-white rounded-xl p-6 shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm text-gray-500">Images Processed</h4>
+                <p className="text-2xl font-bold">{stats.totalImages}</p>
+              </div>
+              <Download className="w-8 h-8 text-primary-600" />
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-600">Money Saved</span>
-              <TrendingUp className="w-4 h-4 text-green-600" />
-            </div>
-            <div className="text-3xl font-bold text-gray-900">
-              {formatCurrency(stats.moneySaved)}
+          <div className="bg-white rounded-xl p-6 shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm text-gray-500">Time Saved</h4>
+                <p className="text-2xl font-bold">{formatTime(stats.timeSaved)}</p>
+              </div>
+              <div className="text-primary-600 font-semibold">{formatCurrency(calculateMoneySaved(stats.moneySaved))}</div>
             </div>
           </div>
         </div>
 
         {/* Recent Products */}
-        <div className="bg-white rounded-xl border border-gray-200">
-          <div className="p-6 border-b">
-            <h2 className="text-xl font-semibold text-gray-900">Recent Products</h2>
-          </div>
-
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">Recent Products</h2>
           {products.length === 0 ? (
-            <div className="p-12 text-center">
-              <p className="text-gray-600 mb-4">No products yet</p>
-              <Link href="/upload">
-                <Button>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Process Your First Product
-                </Button>
-              </Link>
+            <div className="bg-white rounded-xl p-6 text-center text-gray-600">
+              No products yet. Start by processing new images.
             </div>
           ) : (
-            <div className="divide-y">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {products.map((product) => (
-                <div key={product.id} className="p-6 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900 mb-1">
-                        {product.name}
-                      </h3>
-                      <div className="flex items-center gap-4 text-sm text-gray-600">
-                        <span>
-                          {formatDate(product.created_at)}
-                        </span>
-                        <span>•</span>
-                        <span>
-                          {product.marketplaces?.join(', ')}
-                        </span>
-                        <span>•</span>
-                        <span className={`
-                          ${product.status === 'completed' ? 'text-green-600' : ''}
-                          ${product.status === 'processing' ? 'text-blue-600' : ''}
-                          ${product.status === 'failed' ? 'text-red-600' : ''}
-                        `}>
-                          {product.status}
-                        </span>
-                      </div>
-                    </div>
-
-                    {product.status === 'completed' && product.zip_url && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => window.open(product.zip_url, '_blank')}
-                      >
-                        <Download className="w-4 h-4 mr-2" />
-                        Download
-                      </Button>
-                    )}
+                <div key={product.id} className="bg-white shadow rounded-lg p-4 flex flex-col">
+                  <img
+                    src={product.thumbnail || '/images/placeholder.png'}
+                    alt={product.name}
+                    className="mb-4 rounded-lg h-48 w-full object-cover"
+                  />
+                  <h3 className="text-lg font-semibold">{product.name}</h3>
+                  <p className="text-sm text-gray-500">{product.status || 'Unknown'}</p>
+                  <div className="mt-4 flex gap-2">
+                    <Button size="sm">Download</Button>
+                    <Button size="sm" variant="secondary">Details</Button>
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
-
-        {/* Upgrade CTA (if free plan) */}
-        {profile?.plan === 'free' && (
-          <div className="mt-8 bg-gradient-to-r from-primary-600 to-primary-700 rounded-xl p-8 text-center text-white">
-            <h3 className="text-2xl font-bold mb-3">
-              Upgrade to Pro
-            </h3>
-            <p className="text-primary-100 mb-6">
-              Get unlimited processing and advanced features
-            </p>
-            <Link href="/pricing">
-              <Button variant="secondary" size="lg">
-                View Plans
-              </Button>
-            </Link>
-          </div>
-        )}
       </main>
     </div>
   );

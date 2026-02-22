@@ -52,26 +52,35 @@ export async function POST(request) {
       );
     }
 
-    // Check user credits
+    console.log('User authenticated:', user.id);
+
+    // Check user credits - use maybeSingle() instead of single()
     const { data: profile, error: profileError } = await supabase
       .from('users')
       .select('credits_remaining')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
-    if (profileError || !profile) {
+    console.log('Profile query result:', { profile, profileError });
+
+    // If profile doesn't exist
+    if (!profile) {
+      console.error('Profile not found for user:', user.id);
       return NextResponse.json(
-        { error: 'User profile not found' },
+        { error: 'User profile not found. Please sign out and sign in again.' },
         { status: 404 }
       );
     }
 
+    // Check credits
     if (profile.credits_remaining < images.length) {
       return NextResponse.json(
         { error: `Insufficient credits. You have ${profile.credits_remaining} but need ${images.length}.` },
         { status: 403 }
       );
     }
+
+    console.log('Credits check passed:', profile.credits_remaining);
 
     // Create product record
     const productId = uuidv4();
@@ -133,8 +142,7 @@ export async function POST(request) {
       console.error('Images creation error:', imagesError);
     }
 
-    // NOTE: We don't deduct credits yet - only after successful processing
-    // This prevents charging users for failed uploads
+    console.log('Upload successful!');
 
     return NextResponse.json({
       success: true,

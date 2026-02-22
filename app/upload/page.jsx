@@ -24,6 +24,9 @@ function UploadContent() {
   const [processing, setProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processingStep, setProcessingStep] = useState(0);
+  const [selectedBackground, setSelectedBackground] = useState('white');
+const [selectedTemplates, setSelectedTemplates] = useState([]);
+
 
   // Check credits on mount
   useEffect(() => {
@@ -252,6 +255,27 @@ function UploadContent() {
             />
           </div>
         )}
+
+
+
+{currentStep === 3 && (
+  <BackgroundSelector
+    onSelect={setSelectedBackground}
+    onContinue={() => setCurrentStep(4)}
+  />
+)}
+
+{currentStep === 4 && (
+  <TemplateSelector
+    imageCount={uploadedFiles.length}
+    onSelect={setSelectedTemplates}
+    onContinue={() => {
+      // Process with templates
+      handleProcessWithTemplates();
+    }}
+  />
+)}
+
 
         {/* Step 3: Processing */}
         {currentStep === 3 && (
